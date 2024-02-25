@@ -3,12 +3,19 @@ from torch.utils.data import DataLoader
 from aefModel import AefModel
 from dataclasses import dataclass
 from trainer import Trainer
+from dataVisuals.dataLoaders import statistic_search
 import torch
 
 
 @dataclass
 class modelConfig:
     sensor_count: int = 13
+    max_timestep: int = 512
+    sensor_patch_height: int = 64
+    sensor_patch_width: int = 1
+    image_patch_height: int = 16
+    image_patch_width: int = 16
+    sensor_channels: int = 1
     hidden_state_size: int = 256
     num_heads: int = 4
     num_hidden_layers: int = 3
@@ -17,7 +24,6 @@ class modelConfig:
     embd_pdrop: float = 0.1
     lstm_size: int = int(hidden_state_size / (num_rnn_cells * 2))
     rnn_sizes = [lstm_size] * num_rnn_cells
-    max_timestep: int = 512
     timestep_interval: int = 32
     max_epochs: int = 20000
     batch_size: int = 64
@@ -37,7 +43,7 @@ class modelConfig:
             setattr(self, k, v)
 
 
-def main():
+def start_model():
     model_config = modelConfig()
     train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_x.csv'
     train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_y.csv'
@@ -54,6 +60,10 @@ def main():
     trainer = Trainer(model, train_dataloader, test_dataloader, model_config)
 
     trainer.train()
+
+def main():
+    # statistic_search()
+    start_model()
 
 
 # Press the green button in the gutter to run the script.

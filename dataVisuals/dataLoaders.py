@@ -2,8 +2,8 @@ import pandas as pd
 import xgboost as xgb
 import glob
 import os
-from util import train_test_split
-from visualizer import show_variable_comparison, show_confustion_matrix, analyze_model_features
+from dataVisuals.util import train_test_split
+from dataVisuals.visualizer import show_variable_comparison, show_confustion_matrix, analyze_model_features
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -147,3 +147,20 @@ def load_formatted_data():
     x_df['focus'].replace(1, "nan", inplace=True)
     x_df['focus'].replace(2, "distracted", inplace=True)
     show_variable_comparison("principle_component_0", "principle_component_1", x_df, principle_stats)
+
+def statistic_search():
+    path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_x.csv'
+    sensor_data = pd.read_csv(path)
+    sensor_data.fillna(0, inplace=True)
+    sensor_data = sensor_data.drop('unique_id', axis=1)
+
+    sensor_data = (sensor_data - sensor_data.min()) / (sensor_data.max() - sensor_data.min())
+
+    train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_y.csv'
+    labels = pd.read_csv(train_y_path)
+    labels.fillna(1, inplace=True)
+
+    print(f"max of sensor data {sensor_data.max(axis=0)}")
+    print(f"min of sensor data {sensor_data.min(axis=0)}")
+    print(f"max of labels {labels.max(axis=0)}")
+    print(f"min of labels {labels.min(axis=0)}")
