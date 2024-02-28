@@ -3,13 +3,16 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 class AefModel(torch.nn.Module):
+    # I will fill in more comments later on when I finalize this section of the code.
+    # Mostly a phase 2 and 3 part of the project.
     def __init__(self, config):
         super().__init__()
 
         image_height, image_width = pair((config.max_timestep, config.sensor_count))
         patch_height, patch_width = pair((config.sensor_patch_height, config.sensor_patch_width))
 
-        assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
+        assert image_height % patch_height == 0 and image_width % patch_width == 0, \
+            'Image dimensions must be divisible by the patch size.'
 
         num_patches = (image_height // patch_height) * (image_width // patch_width)
         patch_dim = config.sensor_channels * patch_height * patch_width
@@ -61,7 +64,8 @@ class AefModel(torch.nn.Module):
 
     def configure_optimizers(self, train_config):
         optimizer = torch.optim.AdamW(self.parameters(), lr=train_config.learning_rate, betas=train_config.betas)
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[1000, 3000, 10000], gamma=0.1)
+        return optimizer, scheduler
 
 
 def mlp(input_size,
@@ -169,30 +173,8 @@ class Normalize(torch.nn.Module):
         return normalize(x)
 
 
-class ConvBlock(torch.nn.Module):
-    def __init__(self, input_channels, n_kernels):
-        super().__init__()
-
-        self.conv1 = torch.nn.Conv2d(input_channels, n_kernels, kernel_size=3, stride=1, padding=0, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(n_kernels)
-        self.conv2 = torch.nn.Conv2d(n_kernels, n_kernels, kernel_size=3, stride=1, padding=0, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(n_kernels)
-        self.relu = torch.nn.ReLU(inplace=True)
-
-    def forward(self, x) -> torch.nn.Module:
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        return self.relu(out)
-
-    def __call__(self, x):
-        return self.forward(x)
-
-
 class FeedForward(torch.nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = torch.nn.Sequential(
             torch.nn.LayerNorm(dim),
@@ -220,7 +202,7 @@ class Attention(torch.nn.Module):
         self.attend = torch.nn.Softmax(dim=-1)
         self.dropout = torch.nn.Dropout(dropout)
 
-        self.to_qkv = torch.nn.Linear(dim, inner_dim * 3, bias = False)
+        self.to_qkv = torch.nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = torch.nn.Sequential(
             torch.nn.Linear(inner_dim, dim),
