@@ -28,12 +28,13 @@ class Trainer:
         if torch.cuda.is_available():
             self.model = torch.nn.DataParallel(self.model).to(config.device)
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, epoch):
         # DataParallel wrappers keep raw model object in .module attribute
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
         logger.info("saving %s", self.config.ckpt_path)
         # Save the model so we can run tests and inference later.
-        torch.save(raw_model.state_dict(), self.config.ckpt_path)
+        path = self.config.ckpt_path + f'aefmodel_{epoch}.pt'
+        torch.save(raw_model.state_dict(), path)
 
     def train(self):
         model, config = self.model, self.config
@@ -46,11 +47,9 @@ class Trainer:
             # Turns on dropout layers. That is all in this particular model.
             model.train(is_train)
             loader = self.train_dataloader if is_train else self.test_dataloader
-
             losses = []
             local_loss = 0
             for it, (sample, label) in enumerate(loader):
-
                 # place data on the correct device
                 x = sample.to(config.device)
                 y = label.to(config.device)
@@ -64,7 +63,7 @@ class Trainer:
                         # Set up predictions so that they match the shape of the labels
                         predictions = torch.swapaxes(torch.stack(predictions), 0, 1)
                         # Set up labels to match the shape of predictions
-                        local_label = y[:, training_set:training_set + 32]
+                        local_label = y[:, training_set:training_set + config.timestep_interval]
                         # Calculate the loss. Using cross_entropy because it's standard. Not a requirement.
                         cross_entropy_loss = self.cross_entropy_loss(predictions, local_label)
                         # L2 regularization used to keep model weights from becoming too large
@@ -81,17 +80,17 @@ class Trainer:
                         # gradient clipping used to keep model weights from becoming too large
                         torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
                         optimizer.step()
-                        epoch_num += 1
-                        self.summary_writer.add_scalar('train_losses/total', local_loss, epoch_num)
-                        print(f"local_loss {local_loss} with epoch {epoch_num}")
-                    else:
-                        self.save_checkpoint()
-                        self.summary_writer.add_scalar('test_losses/total', local_loss, epoch_num)
-                        print(f"test_local_loss {local_loss} with epoch {epoch_num}")
                     hidden_state = hidden_state.detach()
+                if is_train:
+                    self.summary_writer.add_scalar('train_losses/total', local_loss, epoch_num)
+                    print(f"loss {local_loss} with epoch {epoch_num}")
+                else:
+                    self.save_checkpoint(epoch)
+                    self.summary_writer.add_scalar('test_losses/total', local_loss, epoch_num)
+                    print(f"test_local_loss {local_loss} with epoch {epoch_num}")
+                local_loss = 0
+                epoch_num += 1
 
-            epoch_num += 1
-            local_loss = 0
             # scheduler used because we are training for a long time
             # and lowering the learning rate over time tends to be a good thing
             scheduler.step()
@@ -101,7 +100,7 @@ class Trainer:
         while True:
             epoch = run_epoch('train', epoch_num=epoch)
             # Every 100 epochs, run the test cycle and save a new model.
-            if epoch % 100 == 99:
+            if epoch % 10 == 9:
                 run_epoch('test', epoch_num=epoch)
             if epoch > config.max_epochs:
                 break

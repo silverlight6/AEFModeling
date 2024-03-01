@@ -22,15 +22,19 @@ class AEFDataset(Dataset):
         self.student_labels = self.labels.groupby('unique_id')
         # Separating this variable due to it's importance
         self.max_timestep = config.max_timestep
+
+        self.hash_table = []
+        self.build_hash_table()
+        print(len(self.hash_table))
         # print(f"number of batches in training set {len(self.model_input) / self.max_timestep}")
 
     def __len__(self):
-        return len(self.unique_ids)
+        return len(self.hash_table)
 
     # Now takes 0.04 seconds each call.
     def __getitem__(self, idx):
         # Fetch the student that we want
-        student_id = self.unique_ids[idx]
+        [student_id, student_idx] = self.hash_table[idx]
         # Get all of that students sensor data
         selected_student_df = self.student_dataset.get_group(student_id)
         selected_student_df = selected_student_df.drop('unique_id', axis=1)
@@ -39,16 +43,16 @@ class AEFDataset(Dataset):
         selected_label = self.student_labels.get_group(student_id)
 
         # Fetch the related data. If statement depending on where in the array we are accessing from
-        random_index = random.randint(0, len(selected_student_df) - 2)
-        if random_index > self.max_timestep and random_index + self.max_timestep < len(selected_student_df):
+        random_index = student_idx + random.randint(0, self.max_timestep - 1)
+        if random_index + self.max_timestep < len(selected_student_df):
             sensor_data = selected_student_df.iloc[random_index:random_index + self.max_timestep]
             label_data = selected_label.iloc[random_index:random_index + self.max_timestep]
-        elif random_index < self.max_timestep and random_index + self.max_timestep < len(selected_student_df):
-            sensor_data = selected_student_df.iloc[:random_index]
-            label_data = selected_label.iloc[:random_index]
         else:
             sensor_data = selected_student_df.iloc[random_index:]
             label_data = selected_label.iloc[random_index:]
+
+        if sensor_data.isnull().any().any():
+            print("PANDAS DATA STILL HAS NAN")
 
         # This is the line that I am a little unsure about.
         # I don't want to do this for the entire dataset because we will not have the entire dataset during inference
@@ -75,5 +79,15 @@ class AEFDataset(Dataset):
         sensor_data = torch.tensor(sensor_data.values, dtype=torch.float32)
         label_data = torch.tensor(label_data.values, dtype=torch.float32)
 
+        # Keeping this here because the torch.tensor(sensor_data.values) line sometimes generates a NAN
+        # On a very small subset of the data.
+        if torch.isnan(sensor_data).any():
+            sensor_data = torch.nan_to_num(sensor_data, 0)
         return sensor_data, label_data
+
+    def build_hash_table(self):
+        for unique_id in self.unique_ids:
+            student_data = self.student_dataset.get_group(unique_id)
+            for idx in range(0, len(student_data), self.max_timestep):
+                self.hash_table.append([unique_id, idx])
 

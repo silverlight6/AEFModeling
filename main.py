@@ -4,7 +4,6 @@ from aefModel import AefModel
 from dataclasses import dataclass
 from trainer import Trainer
 from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data
-import torch
 
 
 @dataclass
@@ -24,10 +23,10 @@ class modelConfig:
     embd_pdrop: float = 0.1
     lstm_size: int = int(hidden_state_size / (num_rnn_cells * 2))
     rnn_sizes = [lstm_size] * num_rnn_cells
-    timestep_interval: int = 32
-    max_epochs: int = 20000
-    batch_size: int = 64
-    learning_rate = 5e-3
+    timestep_interval: int = 64
+    max_epochs: int = 500
+    batch_size: int = 128
+    learning_rate = 3e-3
     betas = (0.9, 0.95)
     grad_norm_clip = 1.0
     weight_decay = 0.0001  # only applied on matmul weights
@@ -52,10 +51,10 @@ def start_model():
     test_data = AEFDataset(test_x_path, test_y_path, model_config)
 
     # Path to save the model to
-    model_config.ckpt_path = '/home/silver/MXTReality/AEF/Models'
+    model_config.ckpt_path = '/home/silver/MXTReality/AEF/Models/'
 
-    train_dataloader = DataLoader(train_data, batch_size=model_config.batch_size, num_workers=1)
-    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, num_workers=1)
+    train_dataloader = DataLoader(train_data, batch_size=model_config.batch_size, pin_memory=True, num_workers=4)
+    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, pin_memory=True, num_workers=4)
 
     model = AefModel(model_config)
 
