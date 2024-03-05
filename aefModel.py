@@ -41,9 +41,15 @@ class AefModel(torch.nn.Module):
                                            num_layers=config.num_rnn_cells,
                                            hidden_size=config.lstm_size,
                                            config=config)
+
+        # self.prediction_value_network = mlp(config.hidden_state_size,
+        #                                     [config.hidden_state_size // 2] * config.mlp_layers,
+        #                                     3, torch.nn.Identity, torch.nn.GELU)
+
         self.config = config
 
     def forward(self, sensor_input: torch.Tensor, prev_hidden_state: torch.tensor) -> (torch.Tensor, torch.Tensor):
+    # def forward(self, sensor_input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         sensor_input = torch.unsqueeze(sensor_input, dim=1)
         x = self.to_patch_embedding(sensor_input)
         b, n, _ = x.shape
@@ -60,11 +66,14 @@ class AefModel(torch.nn.Module):
         hidden_state = self.to_latent(x)
         hidden_state, logits = self.dynamics_network(hidden_state, prev_hidden_state)
 
+        # logits = self.prediction_value_network(hidden_state)
+
         return {"prediction": logits, "hidden_state": hidden_state}
+        # return {"prediction": logits}
 
     def configure_optimizers(self, train_config):
         optimizer = torch.optim.AdamW(self.parameters(), lr=train_config.learning_rate, betas=train_config.betas)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[1000, 3000, 10000], gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[80, 150, 250], gamma=0.1)
         return optimizer, scheduler
 
 
@@ -97,7 +106,7 @@ class DynNetwork(torch.nn.Module):
         self.prediction_value_network = mlp(config.hidden_state_size,
                                             [config.hidden_state_size // 2] * config.mlp_layers,
                                             3, torch.nn.Identity, torch.nn.GELU)
-        self.softmax = torch.nn.Softmax()
+        # self.softmax = torch.nn.Softmax()
         self.model_config = config
 
     def forward(self, hidden_state, encoder_state) -> [torch.nn.Module, torch.nn.Module]:
@@ -107,7 +116,7 @@ class DynNetwork(torch.nn.Module):
         new_hidden_state = self.dynamics_memory((inputs, hidden_state))
 
         logits = self.prediction_value_network(new_hidden_state)
-        logits = self.softmax(logits)
+        # logits = self.softmax(logits)
 
         return new_hidden_state, logits
 

@@ -1,43 +1,11 @@
 from dataset import AEFDataset
 from torch.utils.data import DataLoader
 from aefModel import AefModel
-from dataclasses import dataclass
+from config import modelConfig
 from trainer import Trainer
+import torch
 from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data
-
-
-@dataclass
-class modelConfig:
-    sensor_count: int = 25
-    max_timestep: int = 512
-    sensor_patch_height: int = 64
-    sensor_patch_width: int = 5
-    image_patch_height: int = 16
-    image_patch_width: int = 16
-    sensor_channels: int = 1
-    hidden_state_size: int = 256
-    num_heads: int = 4
-    num_hidden_layers: int = 3
-    mlp_layers: int = 2
-    num_rnn_cells: int = 2
-    embd_pdrop: float = 0.1
-    lstm_size: int = int(hidden_state_size / (num_rnn_cells * 2))
-    rnn_sizes = [lstm_size] * num_rnn_cells
-    timestep_interval: int = 64
-    max_epochs: int = 500
-    batch_size: int = 128
-    learning_rate = 3e-3
-    betas = (0.9, 0.95)
-    grad_norm_clip = 1.0
-    weight_decay = 0.0001  # only applied on matmul weights
-    # checkpoint settings
-    ckpt_path = None
-
-    device: str = 'cuda'
-
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+from dataVisuals.test_results import test_results
 
 
 def start_model():
@@ -53,20 +21,26 @@ def start_model():
     # Path to save the model to
     model_config.ckpt_path = '/home/silver/MXTReality/AEF/Models/'
 
-    train_dataloader = DataLoader(train_data, batch_size=model_config.batch_size, pin_memory=True, num_workers=4)
-    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, pin_memory=True, num_workers=4)
+    train_dataloader = DataLoader(train_data, batch_size=model_config.batch_size, shuffle=True,
+                                  pin_memory=True, num_workers=32)
+    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, shuffle=True,
+                                 pin_memory=True, num_workers=32)
 
     model = AefModel(model_config)
+    # PATH = '/home/silver/MXTReality/AEF/Models/aefmodel_6.pt'
+    # model.load_state_dict(torch.load(PATH))
 
     trainer = Trainer(model, train_dataloader, test_dataloader, model_config)
 
     trainer.train()
 
+
 def main():
-    start_model()
+    # start_model()
     # statistic_search()
     # load_initial_data()
     # load_formatted_data()
+    test_results()
 
 
 # Press the green button in the gutter to run the script.

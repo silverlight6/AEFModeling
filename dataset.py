@@ -1,6 +1,8 @@
 import pandas as pd
+import numpy as np
 import torch
 import random
+import time
 from torch.utils.data import Dataset
 
 
@@ -21,12 +23,15 @@ class AEFDataset(Dataset):
         self.labels.fillna(1, inplace=True)
         self.student_labels = self.labels.groupby('unique_id')
         # Separating this variable due to it's importance
-        self.max_timestep = config.max_timestep
+        self.time_window = config.time_window
 
         self.hash_table = []
         self.build_hash_table()
         print(len(self.hash_table))
         # print(f"number of batches in training set {len(self.model_input) / self.max_timestep}")
+
+        self.mean_noise = 0  # Mean of the Gaussian distribution
+        self.std_dev_noise = 0.1  # Standard deviation of the Gaussian distribution
 
     def __len__(self):
         return len(self.hash_table)
@@ -43,16 +48,18 @@ class AEFDataset(Dataset):
         selected_label = self.student_labels.get_group(student_id)
 
         # Fetch the related data. If statement depending on where in the array we are accessing from
-        random_index = student_idx + random.randint(0, self.max_timestep - 1)
-        if random_index + self.max_timestep < len(selected_student_df):
-            sensor_data = selected_student_df.iloc[random_index:random_index + self.max_timestep]
-            label_data = selected_label.iloc[random_index:random_index + self.max_timestep]
+        random_index = student_idx + random.randint(0, self.time_window - 1)
+        if random_index + self.time_window < len(selected_student_df):
+            sensor_data = selected_student_df.iloc[random_index:random_index + self.time_window]
+            label_data = selected_label.iloc[random_index:random_index + self.time_window]
         else:
             sensor_data = selected_student_df.iloc[random_index:]
             label_data = selected_label.iloc[random_index:]
 
-        if sensor_data.isnull().any().any():
-            print("PANDAS DATA STILL HAS NAN")
+        # # Currently takes 0.03 seconds per call commenting out until I figure out a faster implementation later
+        # for col in sensor_data.columns[:-1]:
+        #     sensor_data.loc[:, col] = sensor_data.loc[:, col] + \
+        #                        np.random.normal(self.mean_noise, self.std_dev_noise, size=len(sensor_data))
 
         # This is the line that I am a little unsure about.
         # I don't want to do this for the entire dataset because we will not have the entire dataset during inference
@@ -64,8 +71,8 @@ class AEFDataset(Dataset):
         # sensor_data = (sensor_data - sensor_data.min()) / (sensor_data.max() - sensor_data.min())
 
         # Pad with zeros if necessary (happens at the start and if we have less than 17 seconds of data)
-        if len(sensor_data) < self.max_timestep:
-            pad_length = self.max_timestep - len(sensor_data)
+        if len(sensor_data) < self.time_window:
+            pad_length = self.time_window - len(sensor_data)
             padding_data = {col: [0] * pad_length for col in self.model_input.columns[:-1]}
             padding_label_data = {col: [1] * pad_length for col in self.labels.columns[:-1]}
             padding = pd.DataFrame(padding_data)
@@ -77,7 +84,7 @@ class AEFDataset(Dataset):
         label_data = label_data.drop('unique_id', axis=1)
         # Convert to tensors so I can use with the model.
         sensor_data = torch.tensor(sensor_data.values, dtype=torch.float32)
-        label_data = torch.tensor(label_data.values, dtype=torch.float32)
+        label_data = torch.tensor(label_data.values, dtype=torch.long)
 
         # Keeping this here because the torch.tensor(sensor_data.values) line sometimes generates a NAN
         # On a very small subset of the data.
@@ -85,9 +92,19 @@ class AEFDataset(Dataset):
             sensor_data = torch.nan_to_num(sensor_data, 0)
         return sensor_data, label_data
 
+    # Uncomment code to only include data that has NAN or off task labels
     def build_hash_table(self):
+        # i = 0
+        # j = 1
         for unique_id in self.unique_ids:
             student_data = self.student_dataset.get_group(unique_id)
-            for idx in range(0, len(student_data), self.max_timestep):
+            for idx in range(0, len(student_data), self.time_window):
+                # if not (self.student_labels.get_group(unique_id)["auto_code"].iloc[idx:idx + self.max_timestep]
+                #         == 0).all():
+                #     self.hash_table.append([unique_id, idx])
+                #     j += 1
+                # else:
+                #     i += 1
                 self.hash_table.append([unique_id, idx])
+        # print(f"I have {j} sections with a mix of labels and {i} sections with just on task behavior")
 
