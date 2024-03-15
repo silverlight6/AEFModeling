@@ -4,17 +4,17 @@ from aefModel import AefModel
 from config import modelConfig
 from trainer import Trainer
 import torch
-from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data
+from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data, load_change_set_data
 from dataVisuals.test_results import test_results
 
 
 def start_model():
     model_config = modelConfig()
     # Paths for train test sensor label data.
-    train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_x.csv'
-    train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_y.csv'
-    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_data_x.csv'
-    test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_data_y.csv'
+    train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_x.csv'
+    train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_y.csv'
+    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv'
+    test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv'
     train_data = AEFDataset(train_x_path, train_y_path, model_config)
     test_data = AEFDataset(test_x_path, test_y_path, model_config)
 
@@ -36,11 +36,12 @@ def start_model():
 
 
 def main():
-    # start_model()
+    start_model()
     # statistic_search()
     # load_initial_data()
     # load_formatted_data()
-    test_results()
+    # test_results()
+    # load_change_set_data()
 
 
 # Press the green button in the gutter to run the script.

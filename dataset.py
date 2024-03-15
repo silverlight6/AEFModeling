@@ -13,6 +13,7 @@ class AEFDataset(Dataset):
         # Filling in any NAN values that may have occurred in the process.
         # More of a precautionary step than anything else
         self.model_input.fillna(0, inplace=True)
+
         # I am fetching students by idx ID instead of idx of the full dataset to save compute
         self.unique_ids = self.model_input['unique_id'].unique()
         # Dataset to access to from the unique_ids

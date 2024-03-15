@@ -130,6 +130,8 @@ class Trainer:
         return predictions, hidden_state
 
     def compute_forward(self, model, x, config, starting_idx):
+        current_outputs = torch.zeros((config.batch_size, config.time_window, 1)).to(config.device)
+        x = torch.cat((x, current_outputs), 2)
         model_input = self.mask_timestep(x, starting_idx)
         predictions = []
 
@@ -139,7 +141,9 @@ class Trainer:
 
         for unroll_step in range(1, config.timestep_interval):
             # Masking out all information that we do not have access to yet.
+            x[:, starting_idx + unroll_step - 1, -1] = torch.argmax(output["prediction"], -1)
             model_input = self.mask_timestep(x, starting_idx + unroll_step)
+
             output = model(model_input)
 
             predictions.append(output["prediction"])

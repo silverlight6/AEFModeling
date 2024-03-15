@@ -122,6 +122,70 @@ def load_initial_data():
     print(sensor_data.keys())
 
 
+def load_change_set_data():
+    path = '/home/silver/MXTReality/AEF/Data/Sensor'
+    all_files = glob.glob(os.path.join(path, "*.csv"))
+
+    li = []
+    count = 0
+    for filename in all_files:
+        count += 1
+        df = pd.read_csv(filename, index_col=None, header=0, low_memory=False)
+        li.append(df)
+
+    sensor_data = pd.concat(li, ignore_index=True)
+
+    sensor_data['unique_id'] = sensor_data['subject'].astype(str) + '_' + \
+                               sensor_data['study_num'].astype(str) + '_' + sensor_data['num_sessions'].astype(str)
+
+    label_mapping = {'p': 0, 'n': 1, 'd': 2}
+    sensor_data['auto_code'] = sensor_data['auto_code'].replace(label_mapping)
+    sensor_data['auto_code'] = sensor_data['auto_code'].replace(to_replace=r'^[^0-9]*$', value=2, regex=True)
+    sensor_data['auto_code'] = sensor_data['auto_code'].apply(pd.to_numeric, errors='coerce')
+
+    change_indicator = np.concatenate(([0], np.diff(sensor_data['auto_code']) != 0)).astype(int)
+    sensor_data['auto_code'] = change_indicator
+    print(sensor_data['auto_code'].value_counts())
+
+    sensor_data[FEATURES] = sensor_data[FEATURES].apply(pd.to_numeric, errors='coerce')
+    sensor_data.fillna(0, inplace=True)
+
+    headset_position_df = sensor_data[['headset_position_x', 'headset_position_y', 'headset_position_z']]
+    headset_rotation_df = sensor_data[['headset_rotation_x', 'headset_rotation_y', 'headset_rotation_z']]
+    gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
+    gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
+
+    intervals = [30, 90, 300]
+    dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
+    interval_names = ['headset_position', 'headset_rotation', 'gaze_origin', 'gaze_direction']
+    args_list = [(dataframe, interval, name) for interval in intervals
+                 for dataframe, name in zip(dataframes, interval_names)]
+    name_interval_pairs = [(name, interval) for interval in intervals for name in interval_names]
+    # Create a multiprocessing Pool
+    with Pool(processes=len(args_list)) as pool:
+        # Calculate max distance for each interval concurrently
+        max_distances_list = pool.map(calculate_max_distance, args_list)
+        print("starting process")
+
+    # Update DataFrame with calculated max distances
+    for (name, interval), max_distances in zip(name_interval_pairs, max_distances_list):
+        sensor_data[f'max_{name}_dist_{interval / 30}s'] = max_distances
+        print(f'max_{name}_dist_{interval / 30}s')
+
+    sensor_data = sensor_data.drop(DROP_LIST_1, axis=1)
+
+    label = sensor_data[['auto_code', 'unique_id']].copy()
+    sensor_data = sensor_data.drop(DROP_LIST_2, axis=1)
+    X_train, X_test, y_train, y_test = train_test_split(sensor_data, label, 0.9)
+    X_train.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_x.csv', index=False)
+    X_test.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv', index=False)
+    y_train.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_y.csv', index=False)
+    y_test.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv', index=False)
+
+    print(sensor_data.head())
+    print(sensor_data.keys())
+
+
 def load_formatted_data():
     train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_x.csv'
     train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_y.csv'

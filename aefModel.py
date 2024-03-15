@@ -37,19 +37,19 @@ class AefModel(torch.nn.Module):
         self.pool = 'cls'
         self.to_latent = torch.nn.Identity()
 
-        self.dynamics_network = DynNetwork(input_size=config.hidden_state_size,
-                                           num_layers=config.num_rnn_cells,
-                                           hidden_size=config.lstm_size,
-                                           config=config)
+        # self.dynamics_network = DynNetwork(input_size=config.hidden_state_size,
+        #                                    num_layers=config.num_rnn_cells,
+        #                                    hidden_size=config.lstm_size,
+        #                                    config=config)
 
-        # self.prediction_value_network = mlp(config.hidden_state_size,
-        #                                     [config.hidden_state_size // 2] * config.mlp_layers,
-        #                                     3, torch.nn.Identity, torch.nn.GELU)
+        self.prediction_value_network = mlp(config.hidden_state_size,
+                                            [config.hidden_state_size // 2] * config.mlp_layers,
+                                            2, torch.nn.Identity, torch.nn.GELU)
 
         self.config = config
 
-    def forward(self, sensor_input: torch.Tensor, prev_hidden_state: torch.tensor) -> (torch.Tensor, torch.Tensor):
-    # def forward(self, sensor_input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+    # def forward(self, sensor_input: torch.Tensor, prev_hidden_state: torch.tensor) -> (torch.Tensor, torch.Tensor):
+    def forward(self, sensor_input: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         sensor_input = torch.unsqueeze(sensor_input, dim=1)
         x = self.to_patch_embedding(sensor_input)
         b, n, _ = x.shape
@@ -64,12 +64,12 @@ class AefModel(torch.nn.Module):
         x = x.mean(dim=1) if self.pool == 'mean' else x[:, 0]
 
         hidden_state = self.to_latent(x)
-        hidden_state, logits = self.dynamics_network(hidden_state, prev_hidden_state)
+        # hidden_state, logits = self.dynamics_network(hidden_state, prev_hidden_state)
 
-        # logits = self.prediction_value_network(hidden_state)
+        logits = self.prediction_value_network(hidden_state)
 
-        return {"prediction": logits, "hidden_state": hidden_state}
-        # return {"prediction": logits}
+        # return {"prediction": logits, "hidden_state": hidden_state}
+        return {"prediction": logits}
 
     def configure_optimizers(self, train_config):
         optimizer = torch.optim.AdamW(self.parameters(), lr=train_config.learning_rate, betas=train_config.betas)
@@ -105,7 +105,7 @@ class DynNetwork(torch.nn.Module):
         # 6 is the number of separate dynamic networks
         self.prediction_value_network = mlp(config.hidden_state_size,
                                             [config.hidden_state_size // 2] * config.mlp_layers,
-                                            3, torch.nn.Identity, torch.nn.GELU)
+                                            2, torch.nn.Identity, torch.nn.GELU)
         # self.softmax = torch.nn.Softmax()
         self.model_config = config
 
