@@ -187,10 +187,10 @@ def load_change_set_data():
 
 
 def load_formatted_data():
-    train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_x.csv'
-    train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_data_y.csv'
-    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_data_x.csv'
-    test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_data_y.csv'
+    train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_x.csv'
+    train_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_y.csv'
+    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv'
+    test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv'
     X_train = pd.read_csv(train_x_path)
     X_test = pd.read_csv(test_x_path)
     y_train = pd.read_csv(train_y_path)
@@ -253,9 +253,11 @@ def load_formatted_data():
     analyze_model_features(model, X_train)
     show_confustion_matrix(cm)
 
-    x_df['focus'].replace(0, "productive", inplace=True)
-    x_df['focus'].replace(1, "nan", inplace=True)
-    x_df['focus'].replace(2, "distracted", inplace=True)
+    x_df['focus'].replace(0, "non-transition", inplace=True)
+    x_df['focus'].replace(1, "transition", inplace=True)
+    # x_df['focus'].replace(0, "productive", inplace=True)
+    # x_df['focus'].replace(1, "nan", inplace=True)
+    # x_df['focus'].replace(2, "distracted", inplace=True)
     show_variable_comparison("principle_component_0", "principle_component_1", x_df, principle_stats)
 
 def statistic_search():

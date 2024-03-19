@@ -6,6 +6,7 @@ from trainer import Trainer
 import torch
 from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data, load_change_set_data
 from dataVisuals.test_results import test_results
+from convTran import convTranTrain, convTranTest
 
 
 def start_model():
@@ -36,12 +37,14 @@ def start_model():
 
 
 def main():
-    start_model()
+    # start_model()
     # statistic_search()
     # load_initial_data()
     # load_formatted_data()
     # test_results()
     # load_change_set_data()
+    # convTranTrain()
+    convTranTest()
 
 
 # Press the green button in the gutter to run the script.

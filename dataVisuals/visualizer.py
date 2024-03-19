@@ -7,7 +7,8 @@ def show_variable_comparison(xLabel, yLabel, df, principle_stats):
     plt.xlabel(xLabel, fontsize=20)
     plt.ylabel(yLabel, fontsize=20)
     plt.title("Principal Component Analysis of sensor values", fontsize=20)
-    targets = ["productive", "nan", "distracted"]
+    # targets = ["productive", "nan", "distracted"]
+    targets = ["non-transition", "transition", "nan"]
     colors = ['g', 'r', 'b']
     for target, color in zip(targets, colors):
         # All indicies for the target in question
