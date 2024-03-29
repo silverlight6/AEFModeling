@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
 
 def show_variable_comparison(xLabel, yLabel, df, principle_stats):
     plt.figure(figsize=(10, 10))
@@ -54,4 +56,42 @@ def analyze_model_features(model, dataset):
         fontweight='light',
     )
 
+    plt.show()
+
+
+# I think I can try to add an array that will include the previous outputs and labels so I can show over longer
+# Time periods
+def switch_visualizer(model, dataloader, config):
+    model = model.eval()
+    pred_list = np.zeros(128, dtype=np.int32)
+    target_list = np.zeros(128, dtype=np.int32)
+    ID_list = np.zeros(128, dtype=np.int32)
+
+    for i, batch in enumerate(dataloader):
+        X, targets, IDs_set = batch
+        student_ids, IDs = IDs_set
+        predictions = model(X.to(config.device))
+        output_pred = torch.argmax(predictions, -1).to(dtype=torch.int8).cpu()
+        pred_list = np.concatenate([pred_list, output_pred.numpy().astype(int)])
+        target_list = np.concatenate([target_list, targets.numpy().astype(int)])
+        ID_list = np.concatenate([ID_list, IDs])
+        if not all(torch.eq(output_pred, targets)):
+            plot_switch(pred_list[-128:], target_list[-128:], ID_list[-128], student_ids[0])
+        # else:
+        #     # These should be equal
+        #     print(output_pred)
+        #     print(targets)
+        #     print(IDs)
+
+
+def plot_switch(pred, targets, starting_id, student_id):
+    x_axis = np.arange(starting_id, starting_id + len(pred))
+    print(f"x_axis {x_axis}, predictions {pred}, targets{targets}")
+    plt.plot(x_axis, pred, 'g', label='predictions')
+    plt.plot(x_axis, targets, '-.r', label='targets')
+    plt.xlabel("Timestep")  # add X-axis label
+    plt.ylabel("classification")  # add Y-axis label
+    plt.yticks([0, 1])
+    plt.title(f"model output vs labels for {student_id}")  # add title
+    plt.legend()
     plt.show()

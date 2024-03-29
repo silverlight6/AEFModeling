@@ -1,5 +1,5 @@
 import os
-from dataset import AEFConvDataset as AEFDataset
+from dataset import AEFConvDataset as AEFDataset, AEFTestConvDataset
 from torch.utils.data import DataLoader
 from config import modelConfig, convTranConfig
 from Models.optimizers import get_optimizer
@@ -8,6 +8,7 @@ from Models.model import model_factory
 from Models.utils import load_model
 from Training import SupervisedTrainer, train_runner
 from torch.utils.tensorboard import SummaryWriter
+from dataVisuals.visualizer import switch_visualizer
 
 
 def convTranTrain():
@@ -20,9 +21,9 @@ def convTranTrain():
     test_data = AEFDataset(test_x_path, test_y_path, model_config)
 
     train_dataloader = DataLoader(train_data, batch_size=model_config.batch_size, shuffle=True,
-                                  pin_memory=True, num_workers=32)
+                                  pin_memory=True, num_workers=28)
     test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, shuffle=True,
-                                 pin_memory=True, num_workers=32)
+                                 pin_memory=True, num_workers=28)
 
     config = convTranConfig
 
@@ -61,13 +62,12 @@ def convTranTrain():
 
 def convTranTest():
     model_config = modelConfig()
-    model_config.dataset_len_mult = 500
     test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv'
     test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv'
-    test_data = AEFDataset(test_x_path, test_y_path, model_config)
+    test_data = AEFTestConvDataset(test_x_path, test_y_path, model_config)
 
     test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, shuffle=True,
-                                 pin_memory=True, num_workers=32)
+                                 pin_memory=True, num_workers=28)
 
     config = convTranConfig
 
@@ -86,10 +86,34 @@ def convTranTest():
 
     best_test_evaluator = SupervisedTrainer(best_model, test_dataloader, config['device'], config['loss_module'],
                                             print_interval=config['print_interval'], console=config['console'],
-                                            print_conf_mat=Trie)
+                                            print_conf_mat=True)
     best_aggr_metrics_test, all_metrics = best_test_evaluator.evaluate(keep_all=True)
     print_str = 'Best Model Test Summary: '
     for k, v in best_aggr_metrics_test.items():
         print_str += '{}: {} | '.format(k, v)
     print(print_str)
     print(f"all_metrics {all_metrics}")
+
+
+def convTranTestVisualizer():
+    model_config = modelConfig()
+    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv'
+    test_y_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv'
+    test_data = AEFTestConvDataset(test_x_path, test_y_path, model_config)
+
+    # With shuffle off, I should be getting a number of frames in a row.
+    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, shuffle=False, num_workers=28)
+
+    config = convTranConfig
+
+    model = model_factory(config)
+
+    config['loss_module'] = get_loss_module()
+
+    save_path = os.path.join(config['save_dir'], 'AEF_' + 'model_{}.pth'.format('last'))
+    model.to(config['device'])
+
+    best_model = load_model(model, save_path)
+    best_model.to(config['device'])
+
+    switch_visualizer(model, test_dataloader, model_config)
