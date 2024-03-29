@@ -29,6 +29,15 @@ DROP_LIST_2 = [
     # 'unique_id'
 ]
 
+DROP_LIST_LABELS = [
+    'num_sessions',
+    'Unnamed: 21',
+    'headset',
+    'correct_date_time',
+    'study_num',
+    'timestamp',
+]
+
 FEATURES = [
     'headset_position_x',
     'headset_position_y',
@@ -181,6 +190,53 @@ def load_change_set_data():
     X_test.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv', index=False)
     y_train.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_y.csv', index=False)
     y_test.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_y.csv', index=False)
+
+    print(sensor_data.head())
+    print(sensor_data.keys())
+
+
+def change_set_minus_labels():
+    # Replace this path with your own path
+    # Auto-code and initial code should not be part of the dataset. All of the other columns should be present
+    path = 'PATH TO DATA'
+    all_files = glob.glob(os.path.join(path, "*.csv"))
+
+    li = []
+    count = 0
+    for filename in all_files:
+        count += 1
+        df = pd.read_csv(filename, index_col=None, header=0, low_memory=False)
+        li.append(df)
+
+    sensor_data = pd.concat(li, ignore_index=True)
+
+    sensor_data[FEATURES] = sensor_data[FEATURES].apply(pd.to_numeric, errors='coerce')
+    sensor_data.fillna(0, inplace=True)
+
+    headset_position_df = sensor_data[['headset_position_x', 'headset_position_y', 'headset_position_z']]
+    headset_rotation_df = sensor_data[['headset_rotation_x', 'headset_rotation_y', 'headset_rotation_z']]
+    gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
+    gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
+
+    intervals = [30, 90, 300]
+    dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
+    interval_names = ['headset_position', 'headset_rotation', 'gaze_origin', 'gaze_direction']
+    args_list = [(dataframe, interval, name) for interval in intervals
+                 for dataframe, name in zip(dataframes, interval_names)]
+    name_interval_pairs = [(name, interval) for interval in intervals for name in interval_names]
+    # Create a multiprocessing Pool
+    with Pool(processes=len(args_list)) as pool:
+        # Calculate max distance for each interval concurrently
+        max_distances_list = pool.map(calculate_max_distance, args_list)
+        print("starting process")
+
+    # Update DataFrame with calculated max distances
+    for (name, interval), max_distances in zip(name_interval_pairs, max_distances_list):
+        sensor_data[f'max_{name}_dist_{interval / 30}s'] = max_distances
+        print(f'max_{name}_dist_{interval / 30}s')
+
+    sensor_data = sensor_data.drop(DROP_LIST_LABELS, axis=1)
+    sensor_data.to_csv('/home/silver/MXTReality/AEF/Data/FormattedData/test_data.csv', index=False)
 
     print(sensor_data.head())
     print(sensor_data.keys())
