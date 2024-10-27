@@ -2,13 +2,11 @@ from dataclasses import dataclass
 
 @dataclass
 class modelConfig:
-    sensor_count: int = 26
+    sensor_count: int = 13
     max_timestep: int = 512
     time_window: int = max_timestep * 2
     sensor_patch_height: int = 1
     sensor_patch_width: int = 26
-    image_patch_height: int = 16
-    image_patch_width: int = 16
     sensor_channels: int = 1
     hidden_state_size: int = 64  # Default is 256
     num_heads: int = 4  # Default is 4
@@ -51,7 +49,7 @@ convTranConfig = {
     "Fix_pos_encode": 'tAPE',
     "Rel_pos_encode": 'eRPE',
     "epochs": 100,
-    "batch_size": 16,
+    "batch_size": 32,
     "lr": 1e-3,
     "dropout": 0.01,
     "val_interval": 2,
@@ -59,7 +57,7 @@ convTranConfig = {
     "gpu": 0,
     "console": 'store_true',
     "seed": 1234,
-    "Data_shape": [16, 25, 512],
+    "Data_shape": [32, 13, 512],
     "num_labels": 2,
     "device": 'cuda',
 }

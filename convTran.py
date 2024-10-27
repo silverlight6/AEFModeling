@@ -1,5 +1,8 @@
 import os
-from dataset import AEFConvDataset as AEFDataset, AEFTestConvDataset
+
+import numpy as np
+import torch
+from dataset import AEFConvDataset as AEFDataset, AEFTestConvDataset, AEFInferenceConv
 from torch.utils.data import DataLoader
 from config import modelConfig, convTranConfig
 from Models.optimizers import get_optimizer
@@ -117,3 +120,31 @@ def convTranTestVisualizer():
     best_model.to(config['device'])
 
     switch_visualizer(model, test_dataloader, model_config)
+
+
+def convTranTestWOLabel():
+    model_config = modelConfig()
+    test_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/test_change_data_x.csv'
+    test_data = AEFInferenceConv(test_x_path, "Unused String", model_config)
+
+    test_dataloader = DataLoader(test_data, batch_size=model_config.batch_size, shuffle=False,
+                                 pin_memory=True, num_workers=28)
+
+    config = convTranConfig
+
+    model = model_factory(config)
+
+    save_path = os.path.join(config['save_dir'], 'AEF_' + 'model_{}.pth'.format('last'))
+    model.to(config['device'])
+
+    best_model, optimizer, start_epoch = load_model(model, save_path, config['optimizer'])
+    best_model.to(config['device'])
+
+    predictions_array = []
+    for i, batch in enumerate(test_dataloader):
+        X, _, _ = batch
+        predictions = model(X.to(config.device))
+        predictions_array.append(torch.argmax(predictions).detach())
+
+    predictions_array = np.asarray(predictions_array)
+    np.save("this is a save path", predictions_array)

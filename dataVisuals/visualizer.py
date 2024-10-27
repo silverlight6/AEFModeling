@@ -61,7 +61,7 @@ def analyze_model_features(model, dataset):
 
 # I think I can try to add an array that will include the previous outputs and labels so I can show over longer
 # Time periods
-def switch_visualizer(model, dataloader, config):
+def zswitch_visualizer(model, dataloader, config):
     model = model.eval()
     pred_list = np.zeros(128, dtype=np.int32)
     target_list = np.zeros(128, dtype=np.int32)

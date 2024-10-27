@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from torch import nn
 from Models.AbsolutePositionalEncoding import tAPE, AbsolutePositionalEncoding, LearnablePositionalEncoding
 from Models.Attention import Attention, Attention_Rel_Scl, Attention_Rel_Vec

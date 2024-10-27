@@ -22,6 +22,18 @@ DROP_LIST_1 = [
     'study_num',
     'timestamp',
     'initial_code',
+    'AttentionStatus',
+    'Unnamed: 0',
+    'Unnamed: 14',
+    'Unnamed: 15',
+    'full_code',
+    'milliseconds',
+    'gaze_origin_x',
+    'gaze_origin_y',
+    'gaze_origin_z',
+    'gaze_direction_x',
+    'gaze_direction_y',
+    'gaze_direction_z',
 ]
 
 DROP_LIST_2 = [
@@ -46,12 +58,12 @@ FEATURES = [
     'headset_rotation_x',
     'headset_rotation_y',
     'headset_rotation_z',
-    'gaze_origin_x',
-    'gaze_origin_y',
-    'gaze_origin_z',
-    'gaze_direction_x',
-    'gaze_direction_y',
-    'gaze_direction_z',
+    # 'gaze_origin_x',
+    # 'gaze_origin_y',
+    # 'gaze_origin_z',
+    # 'gaze_direction_x',
+    # 'gaze_direction_y',
+    # 'gaze_direction_z',
 ]
 
 FEATURES_2 = [
@@ -61,12 +73,12 @@ FEATURES_2 = [
     'max_headset_rotation_dist_1.0s',
     'max_headset_rotation_dist_3.0s',
     'max_headset_rotation_dist_10.0s',
-    'max_gaze_origin_dist_1.0s',
-    'max_gaze_origin_dist_3.0s',
-    'max_gaze_origin_dist_10.0s',
-    'max_gaze_direction_dist_1.0s',
-    'max_gaze_direction_dist_3.0s',
-    'max_gaze_direction_dist_10.0s',
+    # 'max_gaze_origin_dist_1.0s',
+    # 'max_gaze_origin_dist_3.0s',
+    # 'max_gaze_origin_dist_10.0s',
+    # 'max_gaze_direction_dist_1.0s',
+    # 'max_gaze_direction_dist_3.0s',
+    # 'max_gaze_direction_dist_10.0s',
 ]
 
 
@@ -96,11 +108,12 @@ def load_initial_data():
 
     headset_position_df = sensor_data[['headset_position_x', 'headset_position_y', 'headset_position_z']]
     headset_rotation_df = sensor_data[['headset_rotation_x', 'headset_rotation_y', 'headset_rotation_z']]
-    gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
-    gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
+    # gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
+    # gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
 
     intervals = [30, 90, 300]
-    dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
+    # dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
+    dataframes = [headset_position_df, headset_rotation_df]
     interval_names = ['headset_position', 'headset_rotation', 'gaze_origin', 'gaze_direction']
     args_list = [(dataframe, interval, name) for interval in intervals
                  for dataframe, name in zip(dataframes, interval_names)]
@@ -140,10 +153,16 @@ def load_change_set_data():
     for filename in all_files:
         count += 1
         df = pd.read_csv(filename, index_col=None, header=0, low_memory=False)
+        # Start of 2023 or 2024. Temporary way of determining which batch I am in
+        if filename[40:42] == "20":
+            df['unique_id'] = filename[40:]
+            df['subject'] = filename[40:59]
+            df['study_num'] = 0
+            df['num_sessions'] = 0
+            df[['auto_code', 'full_code']] = df[['full_code', 'auto_code']]
         li.append(df)
 
     sensor_data = pd.concat(li, ignore_index=True)
-
     sensor_data['unique_id'] = sensor_data['subject'].astype(str) + '_' + \
                                sensor_data['study_num'].astype(str) + '_' + sensor_data['num_sessions'].astype(str)
 
@@ -161,12 +180,14 @@ def load_change_set_data():
 
     headset_position_df = sensor_data[['headset_position_x', 'headset_position_y', 'headset_position_z']]
     headset_rotation_df = sensor_data[['headset_rotation_x', 'headset_rotation_y', 'headset_rotation_z']]
-    gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
-    gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
+    # gaze_origin_df = sensor_data[['gaze_origin_x', 'gaze_origin_y', 'gaze_origin_z']]
+    # gaze_direction_df = sensor_data[['gaze_direction_x', 'gaze_direction_y', 'gaze_direction_z']]
 
     intervals = [30, 90, 300]
-    dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
-    interval_names = ['headset_position', 'headset_rotation', 'gaze_origin', 'gaze_direction']
+    # dataframes = [headset_position_df, headset_rotation_df, gaze_origin_df, gaze_direction_df]
+    dataframes = [headset_position_df, headset_rotation_df]
+    # interval_names = ['headset_position', 'headset_rotation', 'gaze_origin', 'gaze_direction']
+    interval_names = ['headset_position', 'headset_rotation']
     args_list = [(dataframe, interval, name) for interval in intervals
                  for dataframe, name in zip(dataframes, interval_names)]
     name_interval_pairs = [(name, interval) for interval in intervals for name in interval_names]
