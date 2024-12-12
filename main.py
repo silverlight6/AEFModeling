@@ -1,15 +1,16 @@
-from dataset import AEFDataset
-from torch.utils.data import DataLoader
-from aefModel import AefModel
-from config import modelConfig
-from aef_trainer import Trainer
-import torch
-from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data, load_change_set_data
-from dataVisuals.test_results import test_results
-from convTran import convTranTrain, convTranTest, convTranTestVisualizer
+
+# import torch
+# from dataVisuals.dataLoaders import statistic_search, load_initial_data, load_formatted_data, load_change_set_data
+# from dataVisuals.test_results import test_results
+# from convTran import convTranTrain, convTranTest, convTranTestVisualizer
 
 
 def start_model():
+    from dataset import AEFDataset
+    from torch.utils.data import DataLoader
+    from aefModel import AefModel
+    from config import modelConfig
+    from aef_trainer import Trainer
     model_config = modelConfig()
     # Paths for train test sensor label data.
     train_x_path = '/home/silver/MXTReality/AEF/Data/FormattedData/train_change_data_x.csv'
@@ -35,6 +36,20 @@ def start_model():
 
     trainer.train()
 
+def start_yolo_model():
+    from dataset import YoloDataset
+    from YoloModel import YoloModel
+    from YoloTrainer import Trainer
+
+    train_path = 'C:/Users/sluco/TERCStudents/ProcessedData'
+    test_path = 'C:/Users/sluco/TERCStudents/ProcessValData'
+    train_data = YoloDataset(train_path, 'train')
+    test_data = YoloDataset(test_path, 'test')
+
+    model = YoloModel()
+    trainer = Trainer(model, train_data, test_data, batch_size=32, lr=1e-3)
+    trainer.train(epochs=10, save_path="best_model.pth")
+
 
 def main():
     # start_model()
@@ -45,7 +60,8 @@ def main():
     # load_change_set_data()
     # convTranTrain()
     # convTranTest()
-    convTranTestVisualizer()
+    # convTranTestVisualizer()
+    start_yolo_model()
 
 
 # Press the green button in the gutter to run the script.

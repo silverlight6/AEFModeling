@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import torch
 import random
+import os
 import time
 from torch.utils.data import Dataset
 
@@ -283,7 +284,8 @@ class AEFTestConvDataset(Dataset):
 
 
 class AEFInferenceConv(Dataset):
-    def __init__(self, data_input_path, label_path, config):
+    def __init__(self, data_input_path, label_path):
+
         # Reading the data in from the preprocessed files.
         self.model_input = pd.read_csv(data_input_path)
         # Filling in any NAN values that may have occurred in the process.
@@ -294,9 +296,6 @@ class AEFInferenceConv(Dataset):
         self.unique_ids = self.model_input['unique_id'].unique()
         # Dataset to access to from the unique_ids
         self.student_dataset = self.model_input.groupby('unique_id')
-
-        # Separating this variable due to it's importance
-        self.max_timestep = config.max_timestep
 
         self.hash_table = []
         self.build_hash_table()
@@ -311,36 +310,7 @@ class AEFInferenceConv(Dataset):
     # TODO: create the label as a gradient. The closer I am to the change point, the closer my value is to 1.
     def __getitem__(self, idx):
         # Fetch the student that we want
-        [student_id, student_idx] = self.hash_table[idx]
-        # Get all of that students sensor data
-        selected_student_df = self.student_dataset.get_group(student_id)
-        selected_student_df = selected_student_df.drop('unique_id', axis=1)
-
-        # Fetch the related data. If statement depending on where in the array we are accessing from
-        if student_idx + self.max_timestep < len(selected_student_df):
-            sensor_data = selected_student_df.iloc[student_idx:student_idx + self.max_timestep]
-
-        else:
-            sensor_data = selected_student_df.iloc[student_idx:]
-
-        # Pad with zeros if necessary (happens at the start and if we have less than 17 seconds of data)
-        if len(sensor_data) < self.max_timestep:
-            pad_length = self.max_timestep - len(sensor_data)
-            padding_data = {col: [0] * pad_length for col in self.model_input.columns[:-1]}
-            padding = pd.DataFrame(padding_data)
-            padding = padding.drop('unique_id', axis=1)
-            sensor_data = pd.concat([sensor_data, padding])
-
-        # Convert to tensors so I can use with the model.
-        sensor_data = torch.tensor(sensor_data.values, dtype=torch.float32)
-        label_data = torch.tensor(np.zeros_like(sensor_data.numpy()), dtype=torch.int8)
-
-        # Keeping this here because the torch.tensor(sensor_data.values) line sometimes generates a NAN
-        # On a very small subset of the data.
-        if torch.isnan(sensor_data).any():
-            sensor_data = torch.nan_to_num(sensor_data, 0)
-        sensor_data = torch.swapaxes(sensor_data, 0, 1)
-        return sensor_data, label_data, [student_id, student_idx]
+        return 0, 1, 2
 
     # Uncomment code to only include data that has NAN or off task labels
     def build_hash_table(self):
@@ -349,3 +319,43 @@ class AEFInferenceConv(Dataset):
             print(len(student_data))
             for idx in range(0, len(student_data)):
                 self.hash_table.append([unique_id, idx])
+
+
+class YoloDataset(Dataset):
+    def __init__(self, data_input_path, dataset_type='train'):
+
+        npy_files = [f for f in os.listdir(data_input_path)]
+        self.training_set = None  # Initialize as None
+        self.label_data = None  # Initialize as None
+
+        for i, npy_file in enumerate(npy_files):
+            file_path = os.path.join(data_input_path, npy_file)
+            if not file_path.endswith('target.npy') and dataset_type == 'train':
+                self.label_data, self.training_set = self.add_to_list(file_path, self.training_set, self.label_data)
+            elif dataset_type == 'val' or dataset_type == 'test':
+                self.label_data, self.training_set = self.add_to_list(file_path, self.training_set, self.label_data)
+
+    def __len__(self):
+        return self.training_set.shape[0]
+
+    def __getitem__(self, idx):
+        student_data = self.training_set[idx]
+        label = self.label_data[idx]
+        return student_data, label
+
+    def add_to_list(self, file_path, training_array, label_array):
+        student_data = np.load(file_path)
+        new_labels = student_data[:, -1]
+        new_training_data = student_data[:, :-1]
+
+        if label_array is None:  # If label_array is None, initialize it
+            label_array = new_labels
+        else:
+            label_array = np.concatenate([label_array, new_labels], axis=0)
+
+        if training_array is None:  # If training_array is None, initialize it
+            training_array = new_training_data
+        else:
+            training_array = np.concatenate([training_array, new_training_data], axis=0)
+
+        return label_array, training_array
