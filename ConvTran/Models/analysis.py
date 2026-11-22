@@ -448,7 +448,7 @@ class Analyzer(object):
             plot_confusion_matrix(self.ConfMatrix_normalized_row, label_strings=self.existing_class_names,
                                   title='Confusion matrix normalized by row')
 
-            plt.show(block=True)
+            plt.show(block=False)
 
         # Analyze results
         self.total_accuracy = np.trace(ConfMatrix) / len(y_true)

@@ -7,12 +7,37 @@ import time
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from Models.loss import l2_reg_loss
-from Models import utils, analysis
+from .Models.loss import l2_reg_loss
+from .Models import utils, analysis
 
 logger = logging.getLogger('__main__')
 
 NEG_METRICS = {'loss'}  # metrics for which "better" is less
+POSITIVE_CLASS = 1  # transition class
+
+
+def positive_class_scores(precision, recall, class_ind, positive_class=POSITIVE_CLASS):
+    """Precision, recall, and F1 for the transition class.
+
+    `precision` and `recall` follow `existing_class_ind`, which omits classes
+    absent from both the labels and the predictions. A missing positive class
+    scores 0, matching an all-negative epoch.
+    """
+    class_ind = list(class_ind)
+    if positive_class in class_ind:
+        idx = class_ind.index(positive_class)
+        pos_precision = float(precision[idx])
+        pos_recall = float(recall[idx])
+    else:
+        pos_precision = 0.0
+        pos_recall = 0.0
+    if not np.isfinite(pos_precision):
+        pos_precision = 0.0
+    if not np.isfinite(pos_recall):
+        pos_recall = 0.0
+    denom = pos_precision + pos_recall
+    f1 = 0.0 if denom == 0 else (2.0 * pos_precision * pos_recall / denom)
+    return pos_precision, pos_recall, f1
 
 
 class BaseTrainer(object):
@@ -64,7 +89,8 @@ class SupervisedTrainer(BaseTrainer):
         else:
             self.classification = False
         if kwargs['print_conf_mat']:
-            self.analyzer = analysis.Analyzer(print_conf_mat=True, plot=True)
+            # Print the matrix only. plot=True calls plt.show(block=True) and would hang after training.
+            self.analyzer = analysis.Analyzer(print_conf_mat=True, plot=False)
 
     def train_epoch(self, epoch_num=None):
 
@@ -154,8 +180,14 @@ class SupervisedTrainer(BaseTrainer):
         class_names = np.arange(probs.shape[1])  # TODO: temporary until I decide how to pass class names
         metrics_dict = self.analyzer.analyze_classification(predictions, targets, class_names)
 
-        self.epoch_metrics['accuracy'] = metrics_dict['total_accuracy']  # same as average recall over all classes
-        self.epoch_metrics['precision'] = metrics_dict['prec_avg']  # average precision over all classes
+        pos_precision, pos_recall, pos_f1 = positive_class_scores(
+            metrics_dict['precision'], metrics_dict['recall'], self.analyzer.existing_class_ind
+        )
+        self.epoch_metrics['accuracy'] = metrics_dict['total_accuracy']
+        self.epoch_metrics['precision'] = pos_precision
+        self.epoch_metrics['recall'] = pos_recall
+        self.epoch_metrics['f1'] = pos_f1
+        self._log_subject_scores(predictions, targets, per_batch['IDs'])
 
         '''
         if self.model.num_classes == 2:
@@ -166,6 +198,44 @@ class SupervisedTrainer(BaseTrainer):
             self.epoch_metrics['AUPRC'] = sklearn.metrics.auc(rec, prec)
         '''
         return self.epoch_metrics, metrics_dict
+
+    def _log_subject_scores(self, predictions, targets, id_batches):
+        """Precision and recall of the positive class for each session."""
+        dataset = getattr(self.dataloader, 'dataset', None)
+        table = getattr(dataset, 'hash_table', None)
+        if table is None:
+            return
+        id_parts = []
+        for chunk in id_batches:
+            if torch.is_tensor(chunk):
+                id_parts.append(chunk.detach().cpu().numpy())
+            else:
+                id_parts.append(np.asarray(chunk))
+        ids = np.concatenate(id_parts).reshape(-1)
+        stats = {}
+        for idx, pred, target in zip(ids, predictions, targets):
+            uid = table[int(idx)][0]
+            bucket = stats.setdefault(str(uid), {'tp': 0, 'fp': 0, 'fn': 0})
+            pred = int(pred)
+            target = int(target)
+            if pred == 1 and target == 1:
+                bucket['tp'] += 1
+            elif pred == 1 and target == 0:
+                bucket['fp'] += 1
+            elif pred == 0 and target == 1:
+                bucket['fn'] += 1
+        parts = []
+        for uid in sorted(stats):
+            tp = stats[uid]['tp']
+            fp = stats[uid]['fp']
+            fn = stats[uid]['fn']
+            precision = tp / (tp + fp) if (tp + fp) else 0.0
+            recall = tp / (tp + fn) if (tp + fn) else 0.0
+            parts.append('{} precision {:.3f} recall {:.3f} tp {} fp {} fn {}'.format(
+                uid, precision, recall, tp, fp, fn
+            ))
+        if parts:
+            logger.info('Subject scores: %s', ' | '.join(parts))
 
 
 def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value, epoch):
@@ -201,7 +271,8 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
         condition = (aggr_metrics[config['key_metric']] > best_value)
     if condition:
         best_value = aggr_metrics[config['key_metric']]
-        utils.save_model(os.path.join(config['save_dir'], 'model_best.pth'), epoch, val_evaluator.model)
+        best_name = config.get('best_checkpoint_name', 'model_best.pth')
+        utils.save_model(os.path.join(config['save_dir'], best_name), epoch, val_evaluator.model)
         best_metrics = aggr_metrics.copy()
 
         # pred_filepath = os.path.join(config['pred_dir'], 'best_predictions')
@@ -213,23 +284,38 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
 def train_runner(config, model, trainer, val_evaluator, path):
     epochs = config['epochs']
     optimizer = config['optimizer']
-    loss_module = config['loss_module']
     start_epoch = 0
     total_start_time = time.time()
-    tensorboard_writer = SummaryWriter('summary')
-    best_value = 1e16
+    tensorboard_writer = SummaryWriter(config['tensorboard_dir'])
+    # Higher-is-better metrics have to start below any real score. 1e16 only works for loss.
+    if config['key_metric'] in NEG_METRICS:
+        best_value = 1e16
+    else:
+        best_value = -1e16
     metrics = []  # (for validation) list of lists: for each epoch, stores metrics like loss, ...
     best_metrics = {}
-    save_best_model = utils.SaveBestModel()
-    # save_best_acc_model = utils.SaveBestACCModel()
+    best_f1 = -1.0
+    checkpoint_interval = config.get('checkpoint_interval', 50)
+    save_dir = os.path.dirname(path)
+    os.makedirs(save_dir, exist_ok=True)
 
     for epoch in tqdm(range(start_epoch + 1, epochs + 1), desc='Training Epoch', leave=False):
 
         aggr_metrics_train = trainer.train_epoch(epoch)  # dictionary of aggregate epoch metrics
         aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
                                                               best_value, epoch)
-        save_best_model(aggr_metrics_val['loss'], epoch, model, optimizer, loss_module, path)
-        # save_best_acc_model(aggr_metrics_val['accuracy'], epoch, model, optimizer, loss_module, path)
+        # Validation loss is minimized by predicting "no transition" on every window.
+        # Keep the checkpoint with the best transition-class F1 instead.
+        f1 = aggr_metrics_val['f1']
+        if f1 > best_f1:
+            best_f1 = f1
+            utils.save_model(path, epoch, model, optimizer)
+            logger.info('Saved best positive-class F1 {:.4f} at epoch {} to {}'.format(f1, epoch, path))
+        if checkpoint_interval and epoch % checkpoint_interval == 0:
+            prefix = config.get('checkpoint_prefix', 'AEF_model')
+            epoch_path = os.path.join(save_dir, '{}_epoch_{}.pth'.format(prefix, epoch))
+            utils.save_model(epoch_path, epoch, model, optimizer)
+            logger.info('Saved epoch checkpoint {}'.format(epoch_path))
 
         metrics_names, metrics_values = zip(*aggr_metrics_val.items())
         metrics.append(list(metrics_values))
